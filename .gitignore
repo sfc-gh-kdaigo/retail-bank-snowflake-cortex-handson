@@ -1,0 +1,9 @@
+# 除外フォルダ
+references/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
