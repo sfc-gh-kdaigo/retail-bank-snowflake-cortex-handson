@@ -52,7 +52,7 @@ SHOW NOTIFICATION INTEGRATIONS;
 --   - BODY: メール本文（HTML形式可）
 -- 
 -- 【使用例】
---   CALL SEND_EMAIL('sales@example.com', '東京エレクトロン商談サマリー', '<h1>商談概要</h1><p>...</p>');
+--   CALL SEND_EMAIL('staff@example.com', '顧客対応サマリー', '<h1>対応概要</h1><p>...</p>');
 -- 
 -- ---------------------------------------------------------
 
@@ -118,15 +118,17 @@ CALL SEND_EMAIL(
 --   ステージ内のPDFファイルに対して署名付きダウンロードURLを生成
 -- 
 -- 【パラメータ】
---   - relative_file_path: ファイル名（例: 'Semiconductor_Strategy_and_Policy.pdf'）
+--   - relative_file_path: ファイル名（例: '預金規定.pdf'）
 --   - expiration_mins: URLの有効期限（分）、デフォルト5分
 -- 
 -- 【使用例】
---   CALL GET_DOCUMENT_DOWNLOAD_URL('Semiconductor_Strategy_and_Policy.pdf', 5);
+--   CALL GET_DOCUMENT_DOWNLOAD_URL('預金規定.pdf', 5);
 -- 
 -- 【対象ファイル】
---   - Semiconductor_Strategy_and_Policy.pdf（経産省 半導体政策について）
---   - SupplyChain__Semiconductors_Govsupport.pdf（サプライチェーン支援策）
+--   - 預金規定.pdf（普通預金・定期預金の取引規定）
+--   - 本人確認マニュアル.pdf（KYC手続きガイド）
+--   - 住宅ローン商品説明書.pdf
+--   - カードローン商品説明書.pdf
 -- 
 -- ---------------------------------------------------------
 
@@ -144,7 +146,7 @@ DECLARE
     presigned_url STRING;
     sql_stmt STRING;
     expiration_seconds INTEGER;
-    stage_name STRING DEFAULT '@RETAIL_BANKING_DB.UNSTRUCTURED_DATA.semiconductor_docs';
+    stage_name STRING DEFAULT '@RETAIL_BANKING_DB.UNSTRUCTURED_DATA.document_stage';
     file_count INTEGER;
     available_files STRING;
 BEGIN
@@ -171,7 +173,7 @@ BEGIN
         WHERE "name" LIKE '%.pdf' OR "name" LIKE '%.PDF';
         
         IF (available_files IS NULL OR available_files = '') THEN
-            RETURN 'エラー: ステージにPDFファイルが存在しません。先にPDFファイルをアップロードしてください。\n\nアップロード方法:\n1. Snowsight > Data > Databases > RETAIL_BANKING_DB > UNSTRUCTURED_DATA > Stages > semiconductor_docs\n2. 「+ Files」ボタンをクリック\n3. PDFファイルを選択してアップロード';
+            RETURN 'エラー: ステージにPDFファイルが存在しません。先にPDFファイルをアップロードしてください。\n\nアップロード方法:\n1. Snowsight > Data > Databases > RETAIL_BANKING_DB > UNSTRUCTURED_DATA > Stages > document_stage\n2. 「+ Files」ボタンをクリック\n3. PDFファイルを選択してアップロード';
         ELSE
             RETURN 'エラー: 指定されたファイル「' || relative_file_path || '」がステージに見つかりません。\n\n利用可能なPDFファイル:\n' || available_files || '\n\n正しいファイル名を指定してください。';
         END IF;
@@ -190,75 +192,17 @@ END;
 $$;
 
 -- ---------------------------------------------------------
--- 補助プロシージャ: ステージ内のファイル一覧取得（オプション）
--- ---------------------------------------------------------
--- 【用途】
---   ステージ内にどのファイルがあるか確認するためのヘルパー
--- 
--- 【使用例】
---   CALL LIST_STAGE_FILES();
--- ---------------------------------------------------------
--- 必要に応じてコメントアウトを解除してください
-/*
-CREATE OR REPLACE PROCEDURE RETAIL_BANKING_DB.AGENT.LIST_STAGE_FILES()
-RETURNS TABLE (FILE_NAME STRING, FILE_SIZE NUMBER, LAST_MODIFIED TIMESTAMP_LTZ)
-LANGUAGE SQL
-COMMENT = 'semiconductor_docsステージ内のファイル一覧を取得'
-EXECUTE AS CALLER
-AS
-$$
-DECLARE
-    res RESULTSET;
-BEGIN
-    res := (
-        SELECT 
-            SPLIT_PART("name", '/', -1) AS FILE_NAME,
-            "size" AS FILE_SIZE,
-            "last_modified" AS LAST_MODIFIED
-        FROM TABLE(RESULT_SCAN(LAST_QUERY_ID((
-            SELECT * FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
-        ))))
-    );
-    
-    -- LISTコマンドを実行
-    EXECUTE IMMEDIATE 'LIST @RETAIL_BANKING_DB.UNSTRUCTURED_DATA.semiconductor_docs';
-    
-    RETURN TABLE(
-        SELECT 
-            SPLIT_PART("name", '/', -1) AS FILE_NAME,
-            "size" AS FILE_SIZE,
-            "last_modified"::TIMESTAMP_LTZ AS LAST_MODIFIED
-        FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
-    );
-END;
-$$;
-*/
-
--- ---------------------------------------------------------
 -- 動作確認: ステージ内ファイル一覧確認
 -- ---------------------------------------------------------
 -- まずステージにファイルが存在するか確認
-LIST @RETAIL_BANKING_DB.UNSTRUCTURED_DATA.semiconductor_docs;
+LIST @RETAIL_BANKING_DB.UNSTRUCTURED_DATA.document_stage;
 
--- ---------------------------------------------------------
--- PDFファイルのアップロード手順（まだの場合）
--- ---------------------------------------------------------
--- 方法1: Snowsight GUIからアップロード
---   1. Data > Databases > RETAIL_BANKING_DB > UNSTRUCTURED_DATA
---   2. Stages > SEMICONDUCTOR_DOCS をクリック
---   3. 右上の「+ Files」ボタンをクリック
---   4. PDFファイルを選択してアップロード
---
--- 方法2: SnowSQLからアップロード
---   PUT file:///path/to/Semiconductor_Strategy_and_Policy.pdf 
---       @RETAIL_BANKING_DB.UNSTRUCTURED_DATA.semiconductor_docs;
---
 -- ---------------------------------------------------------
 -- 動作確認: ドキュメントダウンロードURL生成テスト
 -- ---------------------------------------------------------
--- 半導体政策PDFのダウンロードURL生成（有効期限5分）
+-- 預金規定PDFのダウンロードURL生成（有効期限5分）
 -- ※ファイルがステージに存在しない場合は、利用可能なファイル一覧が表示されます
-CALL GET_DOCUMENT_DOWNLOAD_URL('Semiconductor_Strategy_and_Policy.pdf', 5);
+CALL GET_DOCUMENT_DOWNLOAD_URL('預金規定.pdf', 5);
 
 
 
@@ -282,13 +226,8 @@ SHOW PROCEDURES IN SCHEMA RETAIL_BANKING_DB.AGENT;
 -- 
 -- Agentへのツール登録:
 --   1. Snowsight > AI & ML > Snowflake Intelligence
---   2. CORPORATE_SALES_AGENT を編集
+--   2. RETAIL_BANKING_AGENT を編集
 --   3. Tools > Add Tool > Stored Procedure
 --   4. 上記プロシージャを追加
--- 
--- トラブルシューティング:
---   - GET_DOCUMENT_DOWNLOAD_URL で「ファイルが見つかりません」エラーの場合:
---     1. LIST @RETAIL_BANKING_DB.UNSTRUCTURED_DATA.semiconductor_docs; でファイル確認
---     2. ファイルがない場合は、上記「PDFファイルのアップロード手順」を参照
 -- 
 -- =========================================================

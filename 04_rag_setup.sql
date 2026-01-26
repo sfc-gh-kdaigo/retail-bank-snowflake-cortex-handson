@@ -32,27 +32,10 @@ USE SCHEMA RETAIL_BANKING_DB.UNSTRUCTURED_DATA;
 -- =========================================================
 
 -- ---------------------------------------------------------
--- Step 1: PDFファイルのアップロード
+-- Step 1: PDFファイルのアップロード（スキップ）
 -- ---------------------------------------------------------
--- 【事前準備】Snowsight または SnowSQL で以下を実行してPDFをアップロード
--- 
--- ■ Snowsightの場合:
---   1. Data > Databases > RETAIL_BANKING_DB > UNSTRUCTURED_DATA > Stages
---   2. document_stage ステージを選択
---   3. 「+ Files」ボタンをクリック
---   4. resources/sample_docs/ フォルダ内の以下PDFファイルをアップロード:
---      - 預金規定.pdf
---      - 本人確認マニュアル.pdf
---      - 住宅ローン商品説明書.pdf
---      - カードローン商品説明書.pdf
--- 
--- ■ SnowSQLの場合:
---   PUT file:///path/to/預金規定.pdf @document_stage;
---   PUT file:///path/to/本人確認マニュアル.pdf @document_stage;
---   PUT file:///path/to/住宅ローン商品説明書.pdf @document_stage;
---   PUT file:///path/to/カードローン商品説明書.pdf @document_stage;
--- 
--- ※ PDFファイルは resources/generate_sample_pdfs.py を実行して生成できます
+-- ※ 01_db_setup.sql の Git連携で GitHub から COPY FILES 済みのため、
+--   本ステップは不要です。
 -- ---------------------------------------------------------
 
 -- ステージ内のファイル確認
