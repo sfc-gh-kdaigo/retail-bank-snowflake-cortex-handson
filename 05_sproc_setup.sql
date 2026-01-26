@@ -18,149 +18,277 @@
 -- ⚠️ 前提条件:
 --    01_db_setup.sql を先に実行してテーブル・データを作成しておくこと
 --
--- ⚠️ 本ファイルは将来拡張用のテンプレートです
---
 -- =========================================================
 
+USE ROLE ACCOUNTADMIN;
 USE DATABASE RETAIL_BANKING_DB;
 USE WAREHOUSE RETAIL_BANKING_WH;
 USE SCHEMA RETAIL_BANKING_DB.AGENT;
 
 -- =========================================================
--- 将来拡張: Stored Procedure（カスタムツール）
+-- 事前準備: Email Integration の作成
 -- =========================================================
+-- メール送信機能を使用するために、通知インテグレーションを作成
 
--- ---------------------------------------------------------
--- SEND_EMAIL: メール送信
--- ---------------------------------------------------------
--- Agent経由で分析結果をメール送信する際に使用
+CREATE OR REPLACE NOTIFICATION INTEGRATION EMAIL_INTEGRATION
+    TYPE = EMAIL
+    ENABLED = TRUE;
 
-/*
-CREATE OR REPLACE PROCEDURE SEND_EMAIL(
-    RECIPIENT_EMAIL VARCHAR,
-    SUBJECT VARCHAR,
-    BODY VARCHAR
+-- Integration の確認
+SHOW NOTIFICATION INTEGRATIONS;
+-- DESC NOTIFICATION INTEGRATION EMAIL_CONNECTOR;
+
+-- =========================================================
+-- Stored Procedure 1: メール送信
+-- =========================================================
+-- 
+-- 【用途】
+--   Agent経由で「この内容を○○にメールで送って」に対応
+--   商談サマリーや提案資料の情報を関係者にメール送信
+-- 
+-- 【パラメータ】
+--   - RECIPIENT_EMAIL: 送信先メールアドレス
+--   - SUBJECT: メール件名
+--   - BODY: メール本文（HTML形式可）
+-- 
+-- 【使用例】
+--   CALL SEND_EMAIL('sales@example.com', '東京エレクトロン商談サマリー', '<h1>商談概要</h1><p>...</p>');
+-- 
+-- ---------------------------------------------------------
+
+CREATE OR REPLACE PROCEDURE RETAIL_BANKING_DB.AGENT.SEND_EMAIL(
+    "RECIPIENT_EMAIL" VARCHAR, 
+    "SUBJECT" VARCHAR, 
+    "BODY" VARCHAR
 )
 RETURNS VARCHAR
+LANGUAGE PYTHON
+RUNTIME_VERSION = '3.12'
+PACKAGES = ('snowflake-snowpark-python')
+HANDLER = 'send_email'
+COMMENT = 'Agentからメールを送信するためのプロシージャ'
+EXECUTE AS OWNER
+AS '
+def send_email(session, recipient_email, subject, body):
+    try:
+        # Escape single quotes in the body and subject
+        escaped_body = body.replace("''", "''''")
+        escaped_subject = subject.replace("''", "''''")
+        
+        # Execute the system procedure call
+        session.sql(f"""
+            CALL SYSTEM$SEND_EMAIL(
+                ''EMAIL_INTEGRATION'',
+                ''{recipient_email}'',
+                ''{escaped_subject}'',
+                ''{escaped_body}'',
+                ''text/html''
+            )
+        """).collect()
+        
+        return "メールを送信しました: " + recipient_email
+    except Exception as e:
+        return f"メール送信エラー: {str(e)}"
+';
+
+-- ---------------------------------------------------------
+-- 動作確認: メール送信テスト
+-- ---------------------------------------------------------
+-- Step 1: 現在のユーザーのメールアドレスを変数に格納
+SET my_email = (
+    SELECT EMAIL 
+    FROM SNOWFLAKE.ACCOUNT_USAGE.USERS 
+    WHERE NAME = CURRENT_USER()
+);
+
+-- Step 2: 変数を使ってメール送信
+CALL SEND_EMAIL(
+    $my_email,
+    'Snowflake Intelligence テストメール',
+    '<h1>テストメール</h1><p>このメールはCortex Agentのテストです。</p><p>正常に受信できていれば、メール送信機能は正しく動作しています。</p>'
+);
+
+
+-- =========================================================
+-- Stored Procedure 2: ドキュメントダウンロードURL生成
+-- =========================================================
+-- 
+-- 【用途】
+--   Agent経由で「この資料をダウンロードしたい」に対応
+--   ステージ内のPDFファイルに対して署名付きダウンロードURLを生成
+-- 
+-- 【パラメータ】
+--   - relative_file_path: ファイル名（例: 'Semiconductor_Strategy_and_Policy.pdf'）
+--   - expiration_mins: URLの有効期限（分）、デフォルト5分
+-- 
+-- 【使用例】
+--   CALL GET_DOCUMENT_DOWNLOAD_URL('Semiconductor_Strategy_and_Policy.pdf', 5);
+-- 
+-- 【対象ファイル】
+--   - Semiconductor_Strategy_and_Policy.pdf（経産省 半導体政策について）
+--   - SupplyChain__Semiconductors_Govsupport.pdf（サプライチェーン支援策）
+-- 
+-- ---------------------------------------------------------
+
+CREATE OR REPLACE PROCEDURE RETAIL_BANKING_DB.AGENT.GET_DOCUMENT_DOWNLOAD_URL(
+    relative_file_path STRING, 
+    expiration_mins INTEGER DEFAULT 5
+)
+RETURNS STRING
 LANGUAGE SQL
+COMMENT = '内部ステージのPDFファイル用に署名付きダウンロードURLを生成'
+EXECUTE AS CALLER
 AS
 $$
+DECLARE
+    presigned_url STRING;
+    sql_stmt STRING;
+    expiration_seconds INTEGER;
+    stage_name STRING DEFAULT '@RETAIL_BANKING_DB.UNSTRUCTURED_DATA.semiconductor_docs';
+    file_count INTEGER;
+    available_files STRING;
 BEGIN
-    -- メール送信ロジック
-    -- ※ 実際の実装では、Snowflake Notificationや外部サービス連携が必要
+    expiration_seconds := expiration_mins * 60;
     
-    -- サンプル実装（ログ出力のみ）
-    RETURN 'メールを送信しました: ' || RECIPIENT_EMAIL;
+    -- ステージ内のファイル一覧を取得して、指定ファイルの存在を確認
+    EXECUTE IMMEDIATE 'LIST ' || stage_name;
+    
+    -- 指定されたファイルがステージに存在するか確認（パスの末尾がファイル名と一致するかチェック）
+    SELECT COUNT(*)
+    INTO :file_count
+    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+    WHERE "name" LIKE '%' || :relative_file_path
+       OR "name" LIKE '%/' || :relative_file_path;
+    
+    -- ファイルが存在しない場合、利用可能なファイル一覧を返す
+    IF (file_count = 0) THEN
+        -- ステージ内のファイル一覧を再取得
+        EXECUTE IMMEDIATE 'LIST ' || stage_name;
+        
+        SELECT LISTAGG(SPLIT_PART("name", '/', -1), ', ') WITHIN GROUP (ORDER BY "name")
+        INTO :available_files
+        FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+        WHERE "name" LIKE '%.pdf' OR "name" LIKE '%.PDF';
+        
+        IF (available_files IS NULL OR available_files = '') THEN
+            RETURN 'エラー: ステージにPDFファイルが存在しません。先にPDFファイルをアップロードしてください。\n\nアップロード方法:\n1. Snowsight > Data > Databases > RETAIL_BANKING_DB > UNSTRUCTURED_DATA > Stages > semiconductor_docs\n2. 「+ Files」ボタンをクリック\n3. PDFファイルを選択してアップロード';
+        ELSE
+            RETURN 'エラー: 指定されたファイル「' || relative_file_path || '」がステージに見つかりません。\n\n利用可能なPDFファイル:\n' || available_files || '\n\n正しいファイル名を指定してください。';
+        END IF;
+    END IF;
+    
+    -- ファイルが存在する場合、署名付きURLを生成
+    sql_stmt := 'SELECT GET_PRESIGNED_URL(' || stage_name || ', ''' || relative_file_path || ''', ' || expiration_seconds || ') AS url';
+    EXECUTE IMMEDIATE :sql_stmt;
+
+    SELECT "URL"
+    INTO :presigned_url
+    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+
+    RETURN presigned_url;
 END;
 $$;
-*/
 
 -- ---------------------------------------------------------
--- GET_CUSTOMER_SUMMARY: 顧客サマリー取得
+-- 補助プロシージャ: ステージ内のファイル一覧取得（オプション）
 -- ---------------------------------------------------------
--- 指定した顧客の取引サマリーを取得
-
+-- 【用途】
+--   ステージ内にどのファイルがあるか確認するためのヘルパー
+-- 
+-- 【使用例】
+--   CALL LIST_STAGE_FILES();
+-- ---------------------------------------------------------
+-- 必要に応じてコメントアウトを解除してください
 /*
-CREATE OR REPLACE PROCEDURE GET_CUSTOMER_SUMMARY(
-    P_CUSTOMER_ID NUMBER
-)
-RETURNS TABLE (
-    CUSTOMER_NAME VARCHAR,
-    CUSTOMER_TYPE VARCHAR,
-    TOTAL_DEPOSITS NUMBER,
-    TOTAL_WITHDRAWALS NUMBER,
-    NET_FLOW NUMBER,
-    TRANSACTION_COUNT NUMBER
-)
+CREATE OR REPLACE PROCEDURE RETAIL_BANKING_DB.AGENT.LIST_STAGE_FILES()
+RETURNS TABLE (FILE_NAME STRING, FILE_SIZE NUMBER, LAST_MODIFIED TIMESTAMP_LTZ)
 LANGUAGE SQL
+COMMENT = 'semiconductor_docsステージ内のファイル一覧を取得'
+EXECUTE AS CALLER
 AS
 $$
+DECLARE
+    res RESULTSET;
 BEGIN
+    res := (
+        SELECT 
+            SPLIT_PART("name", '/', -1) AS FILE_NAME,
+            "size" AS FILE_SIZE,
+            "last_modified" AS LAST_MODIFIED
+        FROM TABLE(RESULT_SCAN(LAST_QUERY_ID((
+            SELECT * FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+        ))))
+    );
+    
+    -- LISTコマンドを実行
+    EXECUTE IMMEDIATE 'LIST @RETAIL_BANKING_DB.UNSTRUCTURED_DATA.semiconductor_docs';
+    
     RETURN TABLE(
         SELECT 
-            c."漢字氏名１" AS CUSTOMER_NAME,
-            CASE WHEN c."人格コード" = 1 THEN '個人' 
-                 WHEN c."人格コード" = 2 THEN '法人' 
-                 ELSE '個人事業主' END AS CUSTOMER_TYPE,
-            SUM(CASE WHEN t."入払区分" = 1 THEN t."取引金額" ELSE 0 END) AS TOTAL_DEPOSITS,
-            SUM(CASE WHEN t."入払区分" = 2 THEN t."取引金額" ELSE 0 END) AS TOTAL_WITHDRAWALS,
-            SUM(CASE WHEN t."入払区分" = 1 THEN t."取引金額" ELSE -t."取引金額" END) AS NET_FLOW,
-            COUNT(*) AS TRANSACTION_COUNT
-        FROM RETAIL_BANKING_DB.RETAIL_BANKING_JP."顧客基本属性情報＿月次" c
-        LEFT JOIN RETAIL_BANKING_DB.RETAIL_BANKING_JP."流動性預金取引データ＿日次" t
-            ON c."顧客番号" = t."顧客番号"
-            AND t."取消取引表示" = 0
-        WHERE c."顧客番号" = P_CUSTOMER_ID
-        GROUP BY c."漢字氏名１", c."人格コード"
+            SPLIT_PART("name", '/', -1) AS FILE_NAME,
+            "size" AS FILE_SIZE,
+            "last_modified"::TIMESTAMP_LTZ AS LAST_MODIFIED
+        FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
     );
 END;
 $$;
 */
 
 -- ---------------------------------------------------------
--- GENERATE_MONTHLY_REPORT: 月次レポート生成
+-- 動作確認: ステージ内ファイル一覧確認
 -- ---------------------------------------------------------
--- 指定月の取引レポートを生成
+-- まずステージにファイルが存在するか確認
+LIST @RETAIL_BANKING_DB.UNSTRUCTURED_DATA.semiconductor_docs;
 
-/*
-CREATE OR REPLACE PROCEDURE GENERATE_MONTHLY_REPORT(
-    P_YEAR NUMBER,
-    P_MONTH NUMBER
-)
-RETURNS VARCHAR
-LANGUAGE SQL
-AS
-$$
-DECLARE
-    v_total_customers NUMBER;
-    v_new_customers NUMBER;
-    v_total_transactions NUMBER;
-    v_net_inflow NUMBER;
-    v_report VARCHAR;
-BEGIN
-    -- 総顧客数
-    SELECT COUNT(*) INTO v_total_customers
-    FROM RETAIL_BANKING_DB.RETAIL_BANKING_JP."顧客基本属性情報＿月次"
-    WHERE "元帳状態表示" = 0;
-    
-    -- 新規顧客数（当月開設）
-    SELECT COUNT(*) INTO v_new_customers
-    FROM RETAIL_BANKING_DB.RETAIL_BANKING_JP."顧客基本属性情報＿月次"
-    WHERE FLOOR("取引開始日" / 100) = P_YEAR * 100 + P_MONTH;
-    
-    -- 取引件数
-    SELECT COUNT(*) INTO v_total_transactions
-    FROM RETAIL_BANKING_DB.RETAIL_BANKING_JP."流動性預金取引データ＿日次"
-    WHERE "取消取引表示" = 0;
-    
-    -- 純資金流入額
-    SELECT 
-        SUM(CASE WHEN "入払区分" = 1 THEN "取引金額" ELSE 0 END) -
-        SUM(CASE WHEN "入払区分" = 2 THEN "取引金額" ELSE 0 END)
-    INTO v_net_inflow
-    FROM RETAIL_BANKING_DB.RETAIL_BANKING_JP."流動性預金取引データ＿日次"
-    WHERE "取消取引表示" = 0;
-    
-    v_report := '【月次レポート ' || P_YEAR || '年' || P_MONTH || '月】\n' ||
-                '総顧客数: ' || v_total_customers || '名\n' ||
-                '新規顧客数: ' || v_new_customers || '名\n' ||
-                '総取引件数: ' || v_total_transactions || '件\n' ||
-                '純資金流入額: ' || v_net_inflow || '円';
-    
-    RETURN v_report;
-END;
-$$;
-*/
+-- ---------------------------------------------------------
+-- PDFファイルのアップロード手順（まだの場合）
+-- ---------------------------------------------------------
+-- 方法1: Snowsight GUIからアップロード
+--   1. Data > Databases > RETAIL_BANKING_DB > UNSTRUCTURED_DATA
+--   2. Stages > SEMICONDUCTOR_DOCS をクリック
+--   3. 右上の「+ Files」ボタンをクリック
+--   4. PDFファイルを選択してアップロード
+--
+-- 方法2: SnowSQLからアップロード
+--   PUT file:///path/to/Semiconductor_Strategy_and_Policy.pdf 
+--       @RETAIL_BANKING_DB.UNSTRUCTURED_DATA.semiconductor_docs;
+--
+-- ---------------------------------------------------------
+-- 動作確認: ドキュメントダウンロードURL生成テスト
+-- ---------------------------------------------------------
+-- 半導体政策PDFのダウンロードURL生成（有効期限5分）
+-- ※ファイルがステージに存在しない場合は、利用可能なファイル一覧が表示されます
+CALL GET_DOCUMENT_DOWNLOAD_URL('Semiconductor_Strategy_and_Policy.pdf', 5);
+
 
 
 -- =========================================================
--- 05_sproc_setup.sql 完了
+-- Sproc一覧取得
+-- =========================================================
+-- Stored Procedure の確認
+SHOW PROCEDURES IN SCHEMA RETAIL_BANKING_DB.AGENT;
+
+-- ---------------------------------------------------------
+
+-- =========================================================
+-- セットアップ完了
 -- =========================================================
 -- 
--- 本ファイルは将来拡張用のテンプレートです。
--- 実装する際は、コメントアウトを解除して使用してください。
+-- 作成されたオブジェクト:
 -- 
--- 次のステップ:
---   → 06_agent_design.md（Agent設計書）
+-- [RETAIL_BANKING_DB.AGENT]
+--   - SEND_EMAIL（メール送信プロシージャ）
+--   - GET_DOCUMENT_DOWNLOAD_URL（ダウンロードURL生成プロシージャ）
+-- 
+-- Agentへのツール登録:
+--   1. Snowsight > AI & ML > Snowflake Intelligence
+--   2. CORPORATE_SALES_AGENT を編集
+--   3. Tools > Add Tool > Stored Procedure
+--   4. 上記プロシージャを追加
+-- 
+-- トラブルシューティング:
+--   - GET_DOCUMENT_DOWNLOAD_URL で「ファイルが見つかりません」エラーの場合:
+--     1. LIST @RETAIL_BANKING_DB.UNSTRUCTURED_DATA.semiconductor_docs; でファイル確認
+--     2. ファイルがない場合は、上記「PDFファイルのアップロード手順」を参照
 -- 
 -- =========================================================
