@@ -122,7 +122,7 @@ SELECT
     ) AS "AI説明"
 FROM "流動性預金取引データ＿日次"
 WHERE "カナ摘要" IS NOT NULL AND "取消取引表示" = 0
-LIMIT 5;
+LIMIT 10;
 
 -- Step 2: カテゴリ分類
 SELECT 
@@ -138,7 +138,7 @@ SELECT
     ) AS "分類"
 FROM "流動性預金取引データ＿日次"
 WHERE "カナ摘要" IS NOT NULL AND "取消取引表示" = 0
-LIMIT 5;
+LIMIT 10;
 
 -- Step 3: 構造化出力（response_formatでJSON形式の出力を指定）
 SELECT 
@@ -167,7 +167,7 @@ FROM (
         ) AS result
     FROM "流動性預金取引データ＿日次"
     WHERE "カナ摘要" IS NOT NULL AND "取消取引表示" = 0
-    LIMIT 5
+    LIMIT 10
 );
 
 
