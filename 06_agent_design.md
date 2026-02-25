@@ -101,7 +101,6 @@
 | **RETAIL_BANKING_ANALYSIS_SV** | Semantic View | 顧客・取引の構造化データ分析 | `RETAIL_BANKING_DB.ANALYTICS.RETAIL_BANKING_ANALYSIS_SV` |
 | **INTERNAL_DOCS_SEARCH** | Cortex Search | 内部規定・マニュアル・商品説明書検索 | `RETAIL_BANKING_DB.UNSTRUCTURED_DATA.INTERNAL_DOCS_SEARCH` |
 | **SEND_EMAIL** | Stored Procedure | メール送信 | `RETAIL_BANKING_DB.AGENT.SEND_EMAIL` |
-| **GET_DOCUMENT_DOWNLOAD_URL** | Stored Procedure | ドキュメントダウンロードURL生成 | `RETAIL_BANKING_DB.AGENT.GET_DOCUMENT_DOWNLOAD_URL` |
 
 ---
 
@@ -160,38 +159,6 @@
 - 「顧客サマリーをチームにメールで共有して」
 - 「今の分析結果を自分宛にメールして」
 
-### 4. GET_DOCUMENT_DOWNLOAD_URL（Stored Procedure）
-
-**用途：**
-- Agent経由で「この資料をダウンロードしたい」に対応
-- ステージ内のPDFファイルに対して署名付きダウンロードURLを生成
-
-**ツール説明（Agent向け）：**
-```
-このツールは、参照ドキュメント用のCortex Searchツール（INTERNAL_DOCS_SEARCH）から取得した
-relative_pathを使用し、ユーザーがドキュメントを表示・ダウンロードするための一時URLを返します。
-
-返されたURLは、ドキュメントタイトルをテキストとし、このツールの出力をURLとする
-HTMLハイパーリンクとして表示する必要があります。
-```
-
-**パラメータ：**
-| パラメータ名 | 型 | 説明 |
-|-------------|-----|------|
-| relative_file_path | STRING | **Cortex Searchツール（INTERNAL_DOCS_SEARCH）から取得されるrelative_pathの値です。**（例: '預金規定.pdf'） |
-| expiration_mins | INTEGER | URLの有効期限（分）。**デフォルトは5分にしてください。** |
-
-**対象ファイル：**
-- 預金規定.pdf
-- 本人確認マニュアル.pdf
-- 住宅ローン商品説明書.pdf
-- カードローン商品説明書.pdf
-
-**回答可能な質問例：**
-- 「預金規定のPDFをダウンロードしたい」
-- 「住宅ローンの商品説明書のURLを教えて」
-- 「先ほど検索した資料のダウンロードリンクを出して」
-
 ---
 
 ## 📁 関連ファイル
@@ -202,7 +169,7 @@ HTMLハイパーリンクとして表示する必要があります。
 | `02_ai_functions_demo.sql` | Cortex AI Functions デモ |
 | `03_sv_setup.sql` | Semantic View設定（GUI参照用） |
 | `04_rag_setup.sql` | Cortex Search設定SQL |
-| `05_sproc_setup.sql` | Stored Procedure（メール送信、URL生成） |
+| `05_sproc_setup.sql` | Stored Procedure（メール送信） |
 | `resources/99_Intelligence_setup.sql` | Snowflake Intelligence公開設定 |
 
 ---
