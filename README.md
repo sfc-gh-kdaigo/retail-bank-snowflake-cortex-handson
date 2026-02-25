@@ -25,6 +25,7 @@
 *   📊 **Semantic View**の具体的な実装手順（日本語カラム名対応）
 *   🔗 **名寄せデータ**を活用した統合顧客分析の実現方法
 *   📈 銀行業務KPI（純資金流入額、顧客純増数など）のメトリクス定義
+*   🔄 **DATA_AGENT_RUN**によるSQL内でのAgent実行とTask連携
 
 ---
 
@@ -125,8 +126,8 @@
        │              │              │
        ▼              ▼              ▼
   Semantic View   内部規定        SEND_EMAIL
-  （顧客・取引   商品説明書      GET_CUSTOMER_SUMMARY
-    構造化データ） PDF等          等のアクション
+  （顧客・取引   商品説明書      等のアクション
+    構造化データ） PDF等
 ```
 
 ### コンポーネント詳細
@@ -137,7 +138,7 @@
 | **Cortex Agent** | ユーザーの質問を解析し、適切なツール（Analyst/Search/Sproc）を自動選択・実行するオーケストレーション層。 |
 | **Cortex Analyst（ツール）** | Semantic Viewを通じて構造化データ（顧客・取引）に対して自然言語からSQLを生成・実行。 |
 | **Cortex Search（ツール）** | 内部規定、商品説明書、マニュアル等に対するRAG検索を提供。 |
-| **Stored Procedure（ツール）** | メール送信や顧客サマリ生成などのアクション実行（将来拡張用）。 |
+| **Stored Procedure（ツール）** | メール送信などのアクション実行。 |
 
 ---
 
@@ -167,10 +168,11 @@
 | ファイル名 | 内容 |
 |:---|:---|
 | `01_db_setup.sql` | 環境構築・Git連携・テーブル作成・サンプルデータ投入 |
-| `02_ai_functions_demo.sql` | Cortex AI Functions デモ（AI_CLASSIFY, AI_FILTER, AI_COMPLETE） |
+| `02_ai_functions_demo.sql` | Cortex AI Functions デモ（AI_COMPLETE, AI_CLASSIFY, AI_FILTER, AI_SENTIMENT, AI_EMBED, TRANSLATE） |
 | `03_sv_setup.sql` | Semantic View設定（Cortex Analyst用） |
 | `04_rag_setup.sql` | Cortex Search設定（RAG用） |
-| `05_sproc_setup.sql` | Stored Procedure（カスタムツール）※将来拡張 |
+| `05_sproc_setup.sql` | Stored Procedure（カスタムツール） |
+| `07_data_agent_run_demo.sql` | DATA_AGENT_RUN によるSQL内Agent実行デモ |
 
 ### ドキュメント
 
