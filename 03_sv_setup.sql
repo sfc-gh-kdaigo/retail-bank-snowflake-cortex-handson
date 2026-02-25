@@ -11,8 +11,8 @@
 --    1. 01_db_setup.sql          ← 環境構築・データ投入（先に実行）
 --    2. 02_ai_functions_demo.sql ← Cortex AI Functions デモ
 --    3. 03_sv_setup.sql          ← 本ファイル（Semantic View設定）
---    4. 04_rag_setup.sql         ← Cortex Search設定（将来拡張）
---    5. 05_sproc_setup.sql       ← Stored Procedure（将来拡張）
+--    4. 04_rag_setup.sql         ← Cortex Search設定
+--    5. 05_sproc_setup.sql       ← Stored Procedure
 --    6. 06_agent_design.md       ← Agent設計書
 --
 -- ⚠️ 前提条件:
