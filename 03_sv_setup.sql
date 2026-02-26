@@ -187,6 +187,20 @@ FROM RETAIL_BANKING_DB.RETAIL_BANKING_EN.CUSTOMER_ATTRIBUTES_MONTHLY
 WHERE ACCOUNT_STATUS = 0;
 */
 
+-- ■ クエリ7: 日別取引集計（使用テーブル: DEPOSIT_TRANSACTIONS_DAILY）
+-- 質問: 2026年1月の日別取引件数を教えてください
+/*
+SELECT 
+  VALUE_DATE AS "取引日",
+  COUNT(*) AS "取引件数",
+  SUM(TXN_AMOUNT) AS "総取引金額",
+  AVG(TXN_AMOUNT) AS "平均取引金額"
+FROM RETAIL_BANKING_DB.RETAIL_BANKING_EN.DEPOSIT_TRANSACTIONS_DAILY
+WHERE IS_CANCELLED = 0
+GROUP BY VALUE_DATE
+ORDER BY VALUE_DATE;
+*/
+
 -- ---------------------------------------------------------
 -- Step 3: テーブル・リレーションシップ・メトリクス設定
 -- ---------------------------------------------------------
@@ -229,6 +243,7 @@ WHERE ACCOUNT_STATUS = 0;
 --   - TXN_AMOUNT: 取引金額, 金額, transaction amount, amount
 --   - TXN_TYPE: 入出金区分, 入払区分, transaction type
 --   - CHANNEL_CODE: チャネル, 取引チャネル, channel
+--   - VALUE_DATE: 取引日, 取引成立日, transaction date, value date
 -- 
 -- ---------------------------------------------------------
 
