@@ -180,7 +180,6 @@
 | ファイル名 | 内容 |
 |:---|:---|
 | `06_agent_design.md` | Cortex Agent設計ガイド |
-| `08_marketplace_weather_demo.md` | Marketplace 気象データ連携デモ |
 | `resources/03_semantic_view_japanese_columns.md` | 日本語カラム名でのSemantic View設定ガイド |
 
 ### PDFファイル（files/）
