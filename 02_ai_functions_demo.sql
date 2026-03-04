@@ -113,15 +113,17 @@ SELECT AI_EMBED(
     '住宅ローンの繰上返済について教えてください'
 ) AS embedding;
 
--- ベクトル間の類似度比較（コサイン類似度）
-SELECT VECTOR_COSINE_SIMILARITY(
-    AI_EMBED('snowflake-arctic-embed-l-v2.0', '住宅ローンの繰上返済について教えてください'),
-    AI_EMBED('snowflake-arctic-embed-l-v2.0', '住宅ローンの一部返済の手続き方法を知りたい')
+-- AI_SIMILARITYで類似度比較（内部でベクトル化+コサイン類似度を計算）
+-- 類似トピック（意味的に近い距離）
+SELECT AI_SIMILARITY(
+    '住宅ローンの繰上返済について教えてください',
+    '住宅ローンの一部返済の手続き方法を知りたい'
 ) AS similarity_high;
 
-SELECT VECTOR_COSINE_SIMILARITY(
-    AI_EMBED('snowflake-arctic-embed-l-v2.0', '住宅ローンの繰上返済について教えてください'),
-    AI_EMBED('snowflake-arctic-embed-l-v2.0', '外貨預金の為替レートはいつ更新されますか')
+-- 異なるトピック（意味的に遠い距離）
+SELECT AI_SIMILARITY(
+    '住宅ローンの繰上返済について教えてください',
+    '外貨預金の為替レートはいつ更新されますか'
 ) AS similarity_low;
 
 
