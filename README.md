@@ -167,7 +167,8 @@
 
 | ファイル名 | 内容 |
 |:---|:---|
-| `01_db_setup.sql` | 環境構築・Git連携・テーブル作成・サンプルデータ投入 |
+| `00_git_setup.sql` | Git統合セットアップ（API Integration・Git Repository作成） |
+| `01_db_setup.sql` | 環境構築・テーブル作成・サンプルデータ投入 |
 | `02_ai_functions_demo.sql` | Cortex AI Functions デモ（AI_COMPLETE, AI_CLASSIFY, AI_FILTER, AI_SENTIMENT, AI_EMBED, TRANSLATE） |
 | `03_sv_setup.sql` | Semantic View設定（Cortex Analyst用） |
 | `04_rag_setup.sql` | Cortex Search設定（RAG用） |
@@ -178,8 +179,9 @@
 
 | ファイル名 | 内容 |
 |:---|:---|
-| `03_semantic_view_japanese_columns.md` | 日本語カラム名でのSemantic View設定ガイド |
 | `06_agent_design.md` | Cortex Agent設計ガイド |
+| `08_marketplace_weather_demo.md` | Marketplace 気象データ連携デモ |
+| `resources/03_semantic_view_japanese_columns.md` | 日本語カラム名でのSemantic View設定ガイド |
 
 ### PDFファイル（files/）
 
@@ -232,8 +234,8 @@
 | **SCHEMA（日本語版）** | `RETAIL_BANKING_JP` |
 | **SCHEMA（英語版）** | `RETAIL_BANKING_EN` |
 | **WAREHOUSE** | `RETAIL_BANKING_WH` |
-| **金融機関コード** | `0001`（サンプル） |
-| **基準日範囲** | 2025年1月〜12月（12ヶ月分） |
+| **金融機関コード** | `1`（サンプル） |
+| **基準日** | 2026年1月（1ヶ月分のスナップショット） |
 
 ---
 
