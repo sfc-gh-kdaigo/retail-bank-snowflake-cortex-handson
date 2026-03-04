@@ -8,7 +8,7 @@ CREATE OR REPLACE API INTEGRATION git_api_integration
  API_ALLOWED_PREFIXES = ('https://github.com/sfc-gh-kdaigo/')
  ENABLED = TRUE;
 
--- NCB向けハンズオン用のGitHubリポジトリを登録
+-- リテール金融向けハンズオン用のGitHubリポジトリを登録
 CREATE OR REPLACE GIT REPOSITORY retail_bank_snowflake_cortex_handson
  API_INTEGRATION = git_api_integration
  ORIGIN = 'https://github.com/sfc-gh-kdaigo/retail-bank-snowflake-cortex-handson.git';
