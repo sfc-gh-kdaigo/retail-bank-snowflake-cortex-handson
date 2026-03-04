@@ -255,43 +255,49 @@ CREATE TABLE IF NOT EXISTS RETAIL_BANKING_DB.AGENT.BRANCH_SUMMARY_REPORTS (
 -- Step 3-2: 支店マスタを使ったバッチ実行
 -- ---------------------------------------------------------
 -- 支店101〜105に対してエージェントを実行し、結果をテーブルに格納
+--
+-- ※ DATA_AGENT_RUN の第2引数（request_body）は定数リテラルである必要があるため、
+--   CONCAT で動的に構築すると SQL compilation error になる。
+--   Snowflake Scripting で行ごとにループし、EXECUTE IMMEDIATE で
+--   ペイロードをリテラルとして埋め込むことで回避する。
 
-INSERT INTO RETAIL_BANKING_DB.AGENT.BRANCH_SUMMARY_REPORTS
-    (branch_code, report_date, question, agent_response, answer_text, run_id)
-WITH branches AS (
-    -- 対象支店一覧
-    SELECT branch_code
-    FROM (VALUES (101), (102), (103), (104), (105)) AS t(branch_code)
-),
-agent_results AS (
-    SELECT
-        b.branch_code,
-        CONCAT('支店', b.branch_code::STRING, 'の顧客数、当月の入出金合計、主要顧客の取引傾向を要約してください') AS question,
-        TRY_PARSE_JSON(
-            SNOWFLAKE.CORTEX.DATA_AGENT_RUN(
-                'RETAIL_BANKING_DB.AGENT.RETAIL_BANKING_AGENT',
-                CONCAT(
-                    '{"messages":[{"role":"user","content":[{"type":"text","text":"支店',
-                    b.branch_code::STRING,
-                    'の顧客数、当月の入出金合計、主要顧客の取引傾向を要約してください"}]}],"stream":false}'
-                )
-            )
-        ) AS resp
-    FROM branches b
-)
-SELECT
-    branch_code,
-    CURRENT_DATE(),
-    question,
-    resp,
-    -- content 配列から type='text' の回答を結合して抽出
-    (
-        SELECT LISTAGG(c.value:text::STRING, '\n') WITHIN GROUP (ORDER BY c.index)
-        FROM LATERAL FLATTEN(input => resp:content) c
-        WHERE c.value:type::STRING = 'text'
-    ) AS answer_text,
-    resp:metadata:run_id::STRING AS run_id
-FROM agent_results;
+DECLARE
+    v_bc STRING;
+    v_question STRING;
+    v_payload STRING;
+    v_agent_sql STRING;
+    c1 CURSOR FOR SELECT branch_code FROM (VALUES (101), (102), (103), (104), (105)) AS t(branch_code);
+BEGIN
+    FOR rec IN c1 DO
+        v_bc := rec.branch_code::STRING;
+        v_question := '支店' || :v_bc || 'の顧客数、当月の入出金合計、主要顧客の取引傾向を要約してください';
+        v_payload := '{"messages":[{"role":"user","content":[{"type":"text","text":"' || :v_question || '"}]}],"stream":false}';
+
+        -- DATA_AGENT_RUN をリテラル引数で実行し、結果を一時テーブルに格納
+        v_agent_sql := 'CREATE OR REPLACE TEMPORARY TABLE _tmp_agent_resp AS ' ||
+            'SELECT TRY_PARSE_JSON(SNOWFLAKE.CORTEX.DATA_AGENT_RUN(' ||
+            '''RETAIL_BANKING_DB.AGENT.RETAIL_BANKING_AGENT'',' ||
+            '''' || :v_payload || '''' ||
+            ')) AS resp';
+        EXECUTE IMMEDIATE :v_agent_sql;
+
+        -- 一時テーブルから結果を読み取って INSERT
+        INSERT INTO RETAIL_BANKING_DB.AGENT.BRANCH_SUMMARY_REPORTS
+            (branch_code, report_date, question, agent_response, answer_text, run_id)
+        SELECT
+            :v_bc::NUMBER,
+            CURRENT_DATE(),
+            :v_question,
+            resp,
+            (SELECT LISTAGG(c.value:text::STRING, '\n') WITHIN GROUP (ORDER BY c.index)
+             FROM LATERAL FLATTEN(input => resp:content) c
+             WHERE c.value:type::STRING = 'text'),
+            resp:metadata:run_id::STRING
+        FROM _tmp_agent_resp;
+    END FOR;
+    DROP TABLE IF EXISTS _tmp_agent_resp;
+    RETURN 'バッチ処理完了: 支店 101〜105';
+END;
 
 -- ---------------------------------------------------------
 -- Step 3-3: 生成されたレポートの確認
@@ -353,64 +359,80 @@ CREATE TABLE IF NOT EXISTS RETAIL_BANKING_DB.AGENT.AML_INVESTIGATION_RESULTS (
 -- ---------------------------------------------------------
 -- 取引金額30万円以上の取引をアラート対象とし、
 -- エージェントが顧客背景・取引パターン・KYC関連情報を調査
+--
+-- ※ シナリオ3と同様、DATA_AGENT_RUN の引数は定数リテラルである必要があるため、
+--   Snowflake Scripting + EXECUTE IMMEDIATE で行ごとに実行する。
 
-INSERT INTO RETAIL_BANKING_DB.AGENT.AML_INVESTIGATION_RESULTS
-    (customer_id, customer_name, alert_reason, txn_amount, txn_date,
-     agent_response, investigation_summary, run_id)
-WITH high_value_txns AS (
-    -- 高額取引の検出（デモ用に閾値30万円以上）
-    SELECT
-        t."顧客番号" AS customer_id,
-        c."漢字氏名１" AS customer_name,
-        CASE
-            WHEN t."取引金額" >= 500000 THEN '50万円以上の高額取引'
-            WHEN t."取引金額" >= 300000 THEN '30万円以上の取引'
-        END AS alert_reason,
-        t."取引金額" AS txn_amount,
-        t."運用日付" AS txn_date
-    FROM RETAIL_BANKING_DB.RETAIL_BANKING_JP."流動性預金取引データ＿日次" t
-    JOIN RETAIL_BANKING_DB.RETAIL_BANKING_JP."顧客基本属性情報＿月次" c
-        ON t."顧客番号" = c."顧客番号"
-        AND t."金融機関コード" = c."金融機関コード"
-    WHERE t."取引金額" >= 300000
-    QUALIFY ROW_NUMBER() OVER (PARTITION BY t."顧客番号" ORDER BY t."取引金額" DESC) = 1
-),
-agent_results AS (
-    SELECT
-        h.*,
-        TRY_PARSE_JSON(
-            SNOWFLAKE.CORTEX.DATA_AGENT_RUN(
-                'RETAIL_BANKING_DB.AGENT.RETAIL_BANKING_AGENT',
-                CONCAT(
-                    '{"messages":[{"role":"user","content":[{"type":"text","text":"',
-                    '以下の取引について調査してください。',
-                    '顧客名: ', h.customer_name,
-                    ', 顧客番号: ', h.customer_id::STRING,
-                    ', 取引金額: ', h.txn_amount::STRING, '円',
-                    ', 取引日: ', h.txn_date::STRING,
-                    ', アラート理由: ', h.alert_reason,
-                    '。この顧客の属性情報、最近の取引パターン、本人確認状況を確認し、',
-                    'リスク評価と調査所見をまとめてください。',
-                    '"}]}],"stream":false}'
-                )
-            )
-        ) AS resp
-    FROM high_value_txns h
-)
-SELECT
-    customer_id,
-    customer_name,
-    alert_reason,
-    txn_amount,
-    txn_date,
-    resp,
-    (
-        SELECT LISTAGG(c.value:text::STRING, '\n') WITHIN GROUP (ORDER BY c.index)
-        FROM LATERAL FLATTEN(input => resp:content) c
-        WHERE c.value:type::STRING = 'text'
-    ) AS investigation_summary,
-    resp:metadata:run_id::STRING AS run_id
-FROM agent_results;
+DECLARE
+    v_customer_id STRING;
+    v_customer_name STRING;
+    v_alert_reason STRING;
+    v_txn_amount STRING;
+    v_txn_date STRING;
+    v_question STRING;
+    v_payload STRING;
+    v_agent_sql STRING;
+    c1 CURSOR FOR
+        SELECT
+            t."顧客番号"::STRING AS customer_id,
+            c."漢字氏名１" AS customer_name,
+            CASE
+                WHEN t."取引金額" >= 500000 THEN '50万円以上の高額取引'
+                WHEN t."取引金額" >= 300000 THEN '30万円以上の取引'
+            END AS alert_reason,
+            t."取引金額"::STRING AS txn_amount,
+            t."運用日付"::STRING AS txn_date
+        FROM RETAIL_BANKING_DB.RETAIL_BANKING_JP."流動性預金取引データ＿日次" t
+        JOIN RETAIL_BANKING_DB.RETAIL_BANKING_JP."顧客基本属性情報＿月次" c
+            ON t."顧客番号" = c."顧客番号"
+            AND t."金融機関コード" = c."金融機関コード"
+        WHERE t."取引金額" >= 300000
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY t."顧客番号" ORDER BY t."取引金額" DESC) = 1;
+BEGIN
+    FOR rec IN c1 DO
+        v_customer_id := rec.customer_id;
+        v_customer_name := rec.customer_name;
+        v_alert_reason := rec.alert_reason;
+        v_txn_amount := rec.txn_amount;
+        v_txn_date := rec.txn_date;
+        v_question := '以下の取引について調査してください。' ||
+            '顧客名: ' || :v_customer_name ||
+            ', 顧客番号: ' || :v_customer_id ||
+            ', 取引金額: ' || :v_txn_amount || '円' ||
+            ', 取引日: ' || :v_txn_date ||
+            ', アラート理由: ' || :v_alert_reason ||
+            '。この顧客の属性情報、最近の取引パターン、本人確認状況を確認し、' ||
+            'リスク評価と調査所見をまとめてください。';
+        v_payload := '{"messages":[{"role":"user","content":[{"type":"text","text":"' || :v_question || '"}]}],"stream":false}';
+
+        -- DATA_AGENT_RUN をリテラル引数で実行し、結果を一時テーブルに格納
+        v_agent_sql := 'CREATE OR REPLACE TEMPORARY TABLE _tmp_agent_resp AS ' ||
+            'SELECT TRY_PARSE_JSON(SNOWFLAKE.CORTEX.DATA_AGENT_RUN(' ||
+            '''RETAIL_BANKING_DB.AGENT.RETAIL_BANKING_AGENT'',' ||
+            '''' || :v_payload || '''' ||
+            ')) AS resp';
+        EXECUTE IMMEDIATE :v_agent_sql;
+
+        -- 一時テーブルから結果を読み取って INSERT
+        INSERT INTO RETAIL_BANKING_DB.AGENT.AML_INVESTIGATION_RESULTS
+            (customer_id, customer_name, alert_reason, txn_amount, txn_date,
+             agent_response, investigation_summary, run_id)
+        SELECT
+            :v_customer_id::NUMBER,
+            :v_customer_name,
+            :v_alert_reason,
+            :v_txn_amount::NUMBER,
+            :v_txn_date::NUMBER,
+            resp,
+            (SELECT LISTAGG(c.value:text::STRING, '\n') WITHIN GROUP (ORDER BY c.index)
+             FROM LATERAL FLATTEN(input => resp:content) c
+             WHERE c.value:type::STRING = 'text'),
+            resp:metadata:run_id::STRING
+        FROM _tmp_agent_resp;
+    END FOR;
+    DROP TABLE IF EXISTS _tmp_agent_resp;
+    RETURN 'AML調査バッチ完了';
+END;
 
 -- ---------------------------------------------------------
 -- Step 4-3: 調査結果の確認
@@ -481,7 +503,56 @@ CREATE TABLE IF NOT EXISTS RETAIL_BANKING_DB.AGENT.DAILY_SUMMARY_REPORTS (
 ) COMMENT = '日次サマリーレポート（Task による自動生成）';
 
 -- ---------------------------------------------------------
--- Step 5-2: Task の作成（毎朝9時に前日分のサマリーを生成）
+-- Step 5-2: 日次サマリー生成用ストアドプロシージャの作成
+-- ---------------------------------------------------------
+-- ※ Task の AS 句でも DATA_AGENT_RUN の引数は定数リテラルである必要があるため、
+--   ストアドプロシージャ内で EXECUTE IMMEDIATE を使い、Task から CALL する。
+
+CREATE OR REPLACE PROCEDURE RETAIL_BANKING_DB.AGENT.GENERATE_DAILY_SUMMARY()
+RETURNS STRING
+LANGUAGE SQL
+AS
+DECLARE
+    v_date_str STRING;
+    v_question STRING;
+    v_payload STRING;
+    v_agent_sql STRING;
+BEGIN
+    v_date_str := DATEADD(DAY, -1, CURRENT_DATE())::STRING;
+    v_question := '昨日（' || :v_date_str || '）の取引サマリーを作成してください。' ||
+        '以下の項目を含めてください: ' ||
+        '1. 総取引件数と総取引金額、' ||
+        '2. 入金・出金の内訳、' ||
+        '3. チャネル別（窓口/ATM/オンライン）の取引件数、' ||
+        '4. 高額取引（30万円以上）の一覧、' ||
+        '5. 特記事項やリスク所見';
+    v_payload := '{"messages":[{"role":"user","content":[{"type":"text","text":"' || :v_question || '"}]}],"stream":false}';
+
+    v_agent_sql := 'CREATE OR REPLACE TEMPORARY TABLE _tmp_agent_resp AS ' ||
+        'SELECT TRY_PARSE_JSON(SNOWFLAKE.CORTEX.DATA_AGENT_RUN(' ||
+        '''RETAIL_BANKING_DB.AGENT.RETAIL_BANKING_AGENT'',' ||
+        '''' || :v_payload || '''' ||
+        ')) AS resp';
+    EXECUTE IMMEDIATE :v_agent_sql;
+
+    INSERT INTO RETAIL_BANKING_DB.AGENT.DAILY_SUMMARY_REPORTS
+        (report_date, report_type, agent_response, summary_text, run_id)
+    SELECT
+        DATEADD(DAY, -1, CURRENT_DATE()),
+        'DAILY_TXN_SUMMARY',
+        resp,
+        (SELECT LISTAGG(c.value:text::STRING, '\n') WITHIN GROUP (ORDER BY c.index)
+         FROM LATERAL FLATTEN(input => resp:content) c
+         WHERE c.value:type::STRING = 'text'),
+        resp:metadata:run_id::STRING
+    FROM _tmp_agent_resp;
+
+    DROP TABLE IF EXISTS _tmp_agent_resp;
+    RETURN '日次レポート生成完了（対象日: ' || :v_date_str || '）';
+END;
+
+-- ---------------------------------------------------------
+-- Step 5-3: Task の作成（毎朝9時に前日分のサマリーを生成）
 -- ---------------------------------------------------------
 
 CREATE OR REPLACE TASK RETAIL_BANKING_DB.AGENT.DAILY_TXN_SUMMARY_TASK
@@ -489,46 +560,16 @@ CREATE OR REPLACE TASK RETAIL_BANKING_DB.AGENT.DAILY_TXN_SUMMARY_TASK
     SCHEDULE = 'USING CRON 0 9 * * * Asia/Tokyo'
     COMMENT = '日次取引サマリーレポート自動生成タスク'
 AS
-INSERT INTO RETAIL_BANKING_DB.AGENT.DAILY_SUMMARY_REPORTS
-    (report_date, report_type, agent_response, summary_text, run_id)
-WITH agent_result AS (
-    SELECT TRY_PARSE_JSON(
-        SNOWFLAKE.CORTEX.DATA_AGENT_RUN(
-            'RETAIL_BANKING_DB.AGENT.RETAIL_BANKING_AGENT',
-            CONCAT(
-                '{"messages":[{"role":"user","content":[{"type":"text","text":"',
-                '昨日（', DATEADD(DAY, -1, CURRENT_DATE())::STRING, '）の取引サマリーを作成してください。',
-                '以下の項目を含めてください: ',
-                '1. 総取引件数と総取引金額、',
-                '2. 入金・出金の内訳、',
-                '3. チャネル別（窓口/ATM/オンライン）の取引件数、',
-                '4. 高額取引（30万円以上）の一覧、',
-                '5. 特記事項やリスク所見',
-                '"}]}],"stream":false}'
-            )
-        )
-    ) AS resp
-)
-SELECT
-    DATEADD(DAY, -1, CURRENT_DATE()),
-    'DAILY_TXN_SUMMARY',
-    resp,
-    (
-        SELECT LISTAGG(c.value:text::STRING, '\n') WITHIN GROUP (ORDER BY c.index)
-        FROM LATERAL FLATTEN(input => resp:content) c
-        WHERE c.value:type::STRING = 'text'
-    ),
-    resp:metadata:run_id::STRING
-FROM agent_result;
+    CALL RETAIL_BANKING_DB.AGENT.GENERATE_DAILY_SUMMARY();
 
 -- ---------------------------------------------------------
--- Step 5-3: Task の状態確認
+-- Step 5-4: Task の状態確認
 -- ---------------------------------------------------------
 
 SHOW TASKS IN SCHEMA RETAIL_BANKING_DB.AGENT;
 
 -- ---------------------------------------------------------
--- Step 5-4: Task の有効化（本番運用開始時にコメント解除）
+-- Step 5-5: Task の有効化（本番運用開始時にコメント解除）
 -- ---------------------------------------------------------
 -- ⚠️ Task を RESUME するとスケジュール通りに自動実行が開始されます
 --    テスト完了後に有効化してください
@@ -536,14 +577,14 @@ SHOW TASKS IN SCHEMA RETAIL_BANKING_DB.AGENT;
 -- ALTER TASK RETAIL_BANKING_DB.AGENT.DAILY_TXN_SUMMARY_TASK RESUME;
 
 -- ---------------------------------------------------------
--- Step 5-5: Task の手動テスト実行
+-- Step 5-6: Task の手動テスト実行
 -- ---------------------------------------------------------
 -- スケジュールを待たずに即座に実行してテストする場合
 
 -- EXECUTE TASK RETAIL_BANKING_DB.AGENT.DAILY_TXN_SUMMARY_TASK;
 
 -- ---------------------------------------------------------
--- Step 5-6: Task の停止（不要になった場合）
+-- Step 5-7: Task の停止（不要になった場合）
 -- ---------------------------------------------------------
 
 -- ALTER TASK RETAIL_BANKING_DB.AGENT.DAILY_TXN_SUMMARY_TASK SUSPEND;
@@ -664,6 +705,9 @@ SELECT TRY_PARSE_JSON(
 --   - BRANCH_SUMMARY_REPORTS（支店別サマリーレポート）
 --   - AML_INVESTIGATION_RESULTS（AML調査結果）
 --   - DAILY_SUMMARY_REPORTS（日次サマリーレポート）
+--
+--   ストアドプロシージャ:
+--   - GENERATE_DAILY_SUMMARY（日次サマリー生成、Task から呼び出し）
 --
 --   タスク:
 --   - DAILY_TXN_SUMMARY_TASK（日次レポート自動生成、初期状態: SUSPENDED）
