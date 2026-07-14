@@ -30,13 +30,13 @@ USE WAREHOUSE RETAIL_BANKING_WH;
 -- 最もシンプルなCortex AI Functions。LLMにテキスト生成を依頼する。
 
 -- モデル比較: 同じ質問を異なるモデルで実行
-SELECT AI_COMPLETE('claude-4-sonnet', '住宅ローンの固定金利と変動金利の違いを50字以内で教えてください。') AS RESPONSE;
+SELECT AI_COMPLETE('claude-sonnet-4-6', '住宅ローンの固定金利と変動金利の違いを50字以内で教えてください。') AS RESPONSE;
 
 SELECT AI_COMPLETE('openai-gpt-4.1', '住宅ローンの固定金利と変動金利の違いを50字以内で教えてください。') AS RESPONSE;
 
 -- 構造化出力（response_format）: JSON形式で安定した出力を得る
 SELECT AI_COMPLETE(
-    'claude-4-sonnet',
+    'claude-sonnet-4-6',
     '以下の顧客問い合わせを分析してください: 「住宅ローンの繰上返済をしたいのですが、手数料はいくらですか？また、期間短縮型と返済額軽減型のどちらがお得ですか？」',
     {},
     {
@@ -61,7 +61,7 @@ SELECT
     result:"requires_specialist"::BOOLEAN AS "専門担当要否"
 FROM (
     SELECT AI_COMPLETE(
-        'claude-4-sonnet',
+        'claude-sonnet-4-6',
         '以下の顧客問い合わせを分析してください: 「住宅ローンの繰上返済をしたいのですが、手数料はいくらですか？また、期間短縮型と返済額軽減型のどちらがお得ですか？」',
         {},
         {
