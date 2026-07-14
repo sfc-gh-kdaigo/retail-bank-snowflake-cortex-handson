@@ -1,5 +1,5 @@
 -- =========================================================
--- リテールバンキング向け Snowflake Intelligence ハンズオン
+-- リテールバンキング向け Snowflake CoWork ハンズオン
 -- 〜顧客・預金取引分析シナリオ〜
 -- 
 -- 07_data_agent_run_demo.sql - DATA_AGENT_RUN によるSQL内Agent実行

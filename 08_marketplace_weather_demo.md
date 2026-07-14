@@ -2,7 +2,7 @@
 
 ## 概要
 
-Snowflake Marketplace で無料提供されている気象データ（Prepper Open Data Bank - Japanese Weather Data）と、`01_db_setup.sql` でセットアップしたリテールバンキングデータを組み合わせて、Snowflake Intelligence から自然言語で問い合わせるデモシナリオ。
+Snowflake Marketplace で無料提供されている気象データ（Prepper Open Data Bank - Japanese Weather Data）と、`01_db_setup.sql` でセットアップしたリテールバンキングデータを組み合わせて、Snowflake CoWork から自然言語で問い合わせるデモシナリオ。
 
 ### 使用データソース
 

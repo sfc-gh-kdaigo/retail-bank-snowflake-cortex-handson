@@ -223,7 +223,7 @@ ALTER ACCOUNT SET WEB_SEARCH_ENABLED = TRUE;
 
 ### Step 4: 動作確認
 
-1. Snowsight → **AI & ML** → **Snowflake Intelligence**
+1. Snowsight → **AI & ML** → **Snowflake CoWork**
 2. ドロップダウンから **「テクニカルアーキテクト」** を選択
 3. サンプル質問を試す
 
@@ -240,7 +240,7 @@ ALTER ACCOUNT SET CORTEX_ENABLED_CROSS_REGION = 'ANY_REGION';
 
 - **Web Search の利用可能リージョン**: Web Search は一部リージョンでのみ利用可能。利用できない場合は上記の Cross-region 設定を適用
 - **デモ投影専用**: このシナリオはデモ投影用であり、本番環境への適用時は別途セキュリティ・ガバナンスの検討が必要
-- **既存 Agent との共存**: `RETAIL_BANKING_AGENT`（既存）と `TECH_ARCHITECT_AGENT`（本シナリオ）は別の Agent オブジェクトとして共存可能。Snowflake Intelligence UI のドロップダウンで切り替えて使用する
+- **既存 Agent との共存**: `RETAIL_BANKING_AGENT`（既存）と `TECH_ARCHITECT_AGENT`（本シナリオ）は別の Agent オブジェクトとして共存可能。Snowflake CoWork UI のドロップダウンで切り替えて使用する
 
 ---
 
@@ -252,6 +252,6 @@ ALTER ACCOUNT SET CORTEX_ENABLED_CROSS_REGION = 'ANY_REGION';
 | `01_db_setup.sql`                     | 環境構築・データ投入SQL                     |
 | `06_agent_design.md`                  | 既存 Agent（RETAIL_BANKING_AGENT）設計書 |
 | `08_marketplace_weather_demo.md`      | Marketplace 天気デモ                  |
-| `resources/99_Intelligence_setup.sql` | Snowflake Intelligence 公開設定       |
+| `resources/99_Intelligence_setup.sql` | Snowflake CoWork 公開設定       |
 
 

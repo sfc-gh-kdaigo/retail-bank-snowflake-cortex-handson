@@ -1,5 +1,5 @@
 -- =========================================================
--- リテールバンキング向け Snowflake Intelligence ハンズオン
+-- リテールバンキング向け Snowflake CoWork ハンズオン
 -- 〜顧客・預金取引分析シナリオ〜
 -- 
 -- 02_ai_functions_demo.sql - Cortex AI Functions デモ

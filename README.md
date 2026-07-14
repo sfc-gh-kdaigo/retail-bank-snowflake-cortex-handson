@@ -1,4 +1,4 @@
-# 🏦 リテールバンキング向け Snowflake Intelligence ハンズオン
+# 🏦 リテールバンキング向け Snowflake CoWork ハンズオン
 
 地方銀行のリテール営業業務をサポートするAIエージェントを構築するSnowflake Cortex AIハンズオン
 
@@ -15,7 +15,7 @@
 *   **名寄せデータ**を活用し、統合顧客単位での取引状況を把握
 *   顧客セグメント分析（年齢層、業種、取引規模など）による営業ターゲティング支援
 *   取引パターン分析（入出金頻度、残高推移、チャネル利用傾向）による顧客理解
-*   Cortex Agent/Snowflake Intelligenceによる統合的な情報提供
+*   Cortex Agent/Snowflake CoWorkによる統合的な情報提供
 
 ## 📚 このハンズオンで学ぶこと
 
@@ -109,7 +109,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  Snowflake Intelligence                     │
+│                  Snowflake CoWork                     │
 │                    （チャットUI）                            │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -134,7 +134,7 @@
 
 | コンポーネント | 役割 |
 |:---|:---|
-| **Snowflake Intelligence** | Cortex Agentを利用するためのチャットボットUI。営業担当者が自然言語で質問を入力。 |
+| **Snowflake CoWork** | Cortex Agentを利用するためのチャットボットUI。営業担当者が自然言語で質問を入力。 |
 | **Cortex Agent** | ユーザーの質問を解析し、適切なツール（Analyst/Search/Sproc）を自動選択・実行するオーケストレーション層。 |
 | **Cortex Analyst（ツール）** | Semantic Viewを通じて構造化データ（顧客・取引）に対して自然言語からSQLを生成・実行。 |
 | **Cortex Search（ツール）** | 内部規定、商品説明書、マニュアル等に対するRAG検索を提供。 |
@@ -142,7 +142,7 @@
 
 ---
 
-## 💬 Snowflake Intelligence への質問例
+## 💬 Snowflake CoWork への質問例
 
 ### 📊 構造化データ分析（Cortex Analyst）
 *   「先月の新規顧客数と解約顧客数を教えてください」
@@ -211,8 +211,8 @@
    - **Cortex Analyst**: 作成したSemantic Viewを指定
    - **Cortex Search**: 作成したSearch Serviceを指定
 
-### Step 5: Snowflake Intelligenceへ公開
-7. Agentを公開し、Snowflake Intelligenceから作成したCortex Agentを選択してチャット開始
+### Step 5: Snowflake CoWorkへ公開
+7. Agentを公開し、Snowflake CoWorkから作成したCortex Agentを選択してチャット開始
 
 ---
 

@@ -1,4 +1,4 @@
-# Snowflake Intelligence向けAgent 設計書
+# Snowflake CoWork向けAgent 設計書
 
 ## 🤖 基本情報
 
@@ -151,7 +151,7 @@
 | パラメータ名 | 型 | 説明 |
 |-------------|-----|------|
 | RECIPIENT_EMAIL | VARCHAR | 送信先メールアドレス。**メールアドレスが提供されていない場合は、現在のユーザーのメールアドレスに送信します。** |
-| SUBJECT | VARCHAR | メール件名。**件名が指定されていない場合は「Snowflake Intelligence」を使用します。** |
+| SUBJECT | VARCHAR | メール件名。**件名が指定されていない場合は「Snowflake CoWork」を使用します。** |
 | BODY | VARCHAR | メール本文。**HTML構文を使用してください。取得したコンテンツがマークダウン形式の場合は、HTMLに変換してください。** |
 
 **回答可能な質問例：**
@@ -170,12 +170,12 @@
 | `03_sv_setup.sql` | Semantic View設定（GUI参照用） |
 | `04_rag_setup.sql` | Cortex Search設定SQL |
 | `05_sproc_setup.sql` | Stored Procedure（メール送信） |
-| `resources/99_Intelligence_setup.sql` | Snowflake Intelligence公開設定 |
+| `resources/99_Intelligence_setup.sql` | Snowflake CoWork公開設定 |
 
 ---
 
-## 🔧 Snowflake Intelligenceへのエージェント公開
+## 🔧 Snowflake CoWorkへのエージェント公開
 
-GUIでエージェントを作成した後、Snowflake Intelligenceインターフェースに公開するには `resources/99_Intelligence_setup.sql` を実行してください。
+GUIでエージェントを作成した後、Snowflake CoWorkインターフェースに公開するには `resources/99_Intelligence_setup.sql` を実行してください。
 
 詳細は [Snowflake公式ドキュメント](https://docs.snowflake.com/en/user-guide/snowflake-cortex/snowflake-intelligence) を参照。

@@ -1,5 +1,5 @@
 -- =========================================================
--- リテールバンキング向け Snowflake Intelligence ハンズオン
+-- リテールバンキング向け Snowflake CoWork ハンズオン
 -- 〜顧客・預金取引分析シナリオ〜
 -- 
 -- 04_rag_setup.sql - Cortex Search設定（RAG用）
